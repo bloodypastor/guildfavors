@@ -259,14 +259,12 @@ footer.bottom{
     <div class="block">
       <h2>Server weekly bonuses</h2>
       <div id="weekly"></div>
-      <p class="hint">Set where the weekly server bonuses apply. Favors of the same type in the same region are highlighted — they stack. Favors cannot be activated in the Sanctuary or Challenger dungeon.</p>
     </div>
 
     <div class="block">
       <h2>Society jobs</h2>
       <div id="society"></div>
       <datalist id="soc-amounts"><option value="25k"><option value="75k"><option value="150k"></datalist>
-      <p class="hint">Monster Hunter society: gold worth of creatures to kill in each region this week. Leave empty if there is no job.</p>
     </div>
 
   </aside>
@@ -337,8 +335,38 @@ const LOC2CODE = {
   'The Mausoleum':'maus','Tidal Tomb':'tt','Wilderness':'wild',
   "Anchor's Rest":'ar','Horseshoe Bay':'hb','Prevalia':'prev'};
 const CODE2LOC = Object.fromEntries(Object.entries(LOC2CODE).map(([l,c])=>[c,l]));
-const locCode = l => LOC2CODE[l] || l;
-const codeLoc = c => CODE2LOC[c] || c;   /* old links with full names still work */
+/* every valid location, for matching a lowercased full name back to its real case */
+const ALL_LOCS = [...DUNGEONS,...TOWNS,'Ocean','Wilderness','Everywhere'];
+const LOWER2LOC = Object.fromEntries(ALL_LOCS.map(l=>[l.toLowerCase(),l]));
+const locCode = l => LOC2CODE[l] || l.toLowerCase();   /* no code → lowercase, so every link segment looks the same */
+const codeLoc = c => CODE2LOC[c] || LOWER2LOC[String(c).toLowerCase()] || c;   /* old links with full names still work */
+
+/* short codes for favor types, so plan links stay short too */
+const TYPE2CODE = {
+  'Gold Loot':'gold',
+  'Special Loot':'special',
+  'Rare Loot Chance':'rare',
+  'Experience':'xp',
+  'Aspect Essence Usage':'ess',
+  'Damage to Creatures':'dmg',
+  'Damage from Creatures':'dmg-prv',
+  'Boss Damage Dealt':'bossdmg',
+  'Boss Damage Prevention':'bossdmg-prv',
+  'Chance for x2 Harvest':'harvest',
+  'Damage to Beastial':'slayer-beast',
+  'Damage to Construct':'slayer-constr',
+  'Damage to Daemonic':'slayer-daemon',
+  'Damage to Elemental':'slayer-ele',
+  'Damage to Humanoid':'slayer-human',
+  'Damage to Monstrous':'slayer-montr',
+  'Damage to Nature':'slayer-nature',
+  'Damage to Undead':'slayer-undead',
+  'Exceptional Crafting':'exceptional',
+  'Vendor Rebate':'rebate',
+};
+const CODE2TYPE = Object.fromEntries(Object.entries(TYPE2CODE).map(([k,v])=>[v,k]));
+const typeCode = t => TYPE2CODE[t] || t;
+const codeType = c => CODE2TYPE[c] || c;
 
 const WEEKLY_KINDS = [
   {id:'sanct',  ua:'Sanctuary Dungeon',              icon:'sanctuary'},
@@ -350,7 +378,7 @@ const WEEKLY_KINDS = [
   {id:'craft',  ua:'+15% Crafting Exceptional Chance',icon:'exceptional_crafting'},
 ];
 const WKMAP = Object.fromEntries(WEEKLY_KINDS.map(w=>[w.id,w]));
-/* які тижневі бонуси діють у цьому регіоні */
+/* which weekly bonuses are active in this region */
 function weeklyBadges(loc){
   return WEEKLY_KINDS.filter(w=>WEEKLY[w.id]===loc)
     .map(w=>`<img class="wk" src="${ICONS[w.icon]||''}" alt="" title="${esc(w.ua)}">`).join('')
@@ -421,7 +449,7 @@ function parseCSV(text){
   if(cell||row.length){ row.push(cell); rows.push(row); }
   return rows.filter(r=>r.some(v=>v.trim()!==''));
 }
-/* точний збіг із таблицею вікі; інакше найближчий, але з позначкою */
+/* exact match against the wiki table; otherwise closest, flagged as inexact */
 function tierOf(t, num){
   if(!t) return {tier:0, exact:false};
   const hit = t.tiers.findIndex(v=>Math.abs(v-num)<0.01);
@@ -439,17 +467,27 @@ async function load(){
   catch(e){ failState(e.message || 'no access'); }
 }
 
-/* дата оновлення: аркуш meta, комірка A1 */
+/* last-updated date: meta sheet, cell A1, given as DD.MM.YYYY.
+   Rendered as "Sep 20, 2026" so it reads the same for US and EU folks;
+   falls back to the raw sheet text if it isn't that format. */
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtStampDate(s){
+  const m = String(s).trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(!m) return s;
+  const d = +m[1], mo = +m[2];
+  if(mo<1 || mo>12 || d<1 || d>31) return s;
+  return `${MONTHS_SHORT[mo-1]} ${d}, ${m[3]}`;
+}
 async function loadStamp(){
   try{
     const rows = await fetchRows(META_TAB, 'A1');
     const flat = rows.flat().map(v=>String(v).trim()).filter(Boolean);
-    if(flat.length){ STAMP = flat[0]; $('#stamp-date').textContent = STAMP; }
-  }catch(e){ /* лишається значення з DATA_DATE */ }
+    if(flat.length){ STAMP = fmtStampDate(flat[0]); $('#stamp-date').textContent = STAMP; }
+  }catch(e){ /* keep the DATA_DATE fallback value */ }
 }
 
-/* спершу звичайний CSV, потім JSONP — останній обходить CORS
-   і працює навіть коли сторінку відкрито як локальний файл */
+/* try plain CSV first, then JSONP — the latter works around CORS
+   and also works when the page is opened as a local file */
 async function fetchRows(tab, range){
   let q = '&headers=1' + (tab ? '&sheet='+encodeURIComponent(tab) : '');
   if(range) q += '&range='+encodeURIComponent(range);
@@ -466,7 +504,7 @@ async function fetchRows(tab, range){
       if(/<html/i.test(txt)) continue;
       const rows = parseCSV(txt);
       if(rows.length) return rows;
-    }catch(e){ /* CORS або мережа — пробуємо далі */ }
+    }catch(e){ /* CORS or network error — try the next method */ }
   }
   return loadJsonp(q);
 }
@@ -527,8 +565,8 @@ function ingestRows(rows){
     const type=(r[c.t]||'').trim(), loc=(r[c.l]||'').trim();
     if(!type||!loc) continue;
     let val=(r[c.v]||'').trim();
-    /* колонка зі значенням буває порожньою (формат комірки в Sheets) —
-       тоді шукаємо число в будь-якій іншій колонці рядка */
+    /* the value column can be empty (a Sheets cell-format quirk) —
+       in that case look for a number in any other column of the row */
     if(!val){
       for(let i=0;i<r.length;i++){
         if(i===c.t || i===c.l) continue;
@@ -543,8 +581,8 @@ function ingestRows(rows){
     const [type,raw,location] = k.split('|');
     const t = TMAP[type];
     const base = Math.abs(parseFloat(String(raw).replace('%','').replace(',','.')))||0;
-    /* Sheets віддає відсотки в різному масштабі залежно від формату комірки:
-       20, 0.2 або 2000 — беремо той варіант, що точно збігається з тіром вікі */
+    /* Sheets returns percentages at different scales depending on cell format:
+       20, 0.2, or 2000 — pick whichever matches the wiki tier exactly */
     let num = base, res = tierOf(t, base);
     if(!res.exact){
       for(const cand of [base*100, base/100]){
@@ -656,7 +694,7 @@ function saveHash(){
   const p=new URLSearchParams();
   Object.entries(WEEKLY).forEach(([k,v])=>{ if(v) p.set('w.'+k,locCode(v)); });
   SOCIETY_LOCS.forEach(x=>{ if(JOBS[x.loc]) p.set('j.'+(LOC2CODE[x.loc]||x.id), JOBS[x.loc]/1000); });
-  DAYS.forEach((d,di)=>WEEK[di].forEach((f,i)=>p.set(d.id+i, [f.type,f.value,locCode(f.location)].join('~'))));
+  DAYS.forEach((d,di)=>WEEK[di].forEach((f,i)=>p.set(d.id+i, [typeCode(f.type),f.value,locCode(f.location)].join('~'))));
   writingHash = true;
   location.replace('#'+p.toString());
   setTimeout(()=>{ writingHash = false; }, 0);
@@ -675,12 +713,13 @@ function loadHash(){
       if(x && g) JOBS[x.loc]=g;
       continue;
     }
-    /* sat0…fri2; старі посилання з p0…p2 потрапляють у суботу */
+    /* sat0…fri2; old links using p0…p2 fall on Saturday */
     const m = k.match(/^([a-z]{3}|p)(\d)$/);
     if(!m) continue;
     const di = m[1]==='p' ? 0 : dayIdx[m[1]];
     if(di==null) continue;
-    const [type,value,lc]=v.split('~');
+    const [tc,value,lc]=v.split('~');
+    const type = codeType(tc);
     const loc = codeLoc(lc||'');
     if(!type||!loc) continue;
     if(WEEK[di].length<3)
@@ -688,8 +727,8 @@ function loadHash(){
                      tier:tierOf(TMAP[type], Math.abs(parseFloat(value))||0).tier});
   }
 }
-/* адресний рядок теж керує сторінкою: правка хеша вручну або
-   перехід за чужим посиланням одразу застосовує тиждень і план */
+/* the address bar also drives the page: editing the hash by hand or
+   opening someone else's link applies the week and plan immediately */
 window.addEventListener('hashchange', ()=>{
   if(writingHash) return;
   loadHash();
