@@ -694,7 +694,7 @@ function saveHash(){
   const p=new URLSearchParams();
   Object.entries(WEEKLY).forEach(([k,v])=>{ if(v) p.set('w.'+k,locCode(v)); });
   SOCIETY_LOCS.forEach(x=>{ if(JOBS[x.loc]) p.set('j.'+(LOC2CODE[x.loc]||x.id), JOBS[x.loc]/1000); });
-  DAYS.forEach((d,di)=>WEEK[di].forEach((f,i)=>p.set(d.id+i, [typeCode(f.type),f.value,locCode(f.location)].join('~'))));
+  DAYS.forEach((d,di)=>WEEK[di].forEach((f,i)=>p.set(d.id+i, `${typeCode(f.type)}-${locCode(f.location)}-${f.num!=null?f.num:''}`)));
   writingHash = true;
   location.replace('#'+p.toString());
   setTimeout(()=>{ writingHash = false; }, 0);
@@ -718,9 +718,20 @@ function loadHash(){
     if(!m) continue;
     const di = m[1]==='p' ? 0 : dayIdx[m[1]];
     if(di==null) continue;
-    const [tc,value,lc]=v.split('~');
-    const type = codeType(tc);
-    const loc = codeLoc(lc||'');
+    /* "gold-ak-25" — type code (may itself contain hyphens), region code, plain number.
+       Old links used "type~value~region" (with a %-encoded value) — still read those too. */
+    let type, value, loc;
+    if(v.includes('~')){
+      const [tc,val,lc]=v.split('~');
+      type = codeType(tc); value = val; loc = codeLoc(lc||'');
+    } else {
+      const parts = v.split('-');
+      if(parts.length<3) continue;
+      const num = parts.pop(), lc = parts.pop();
+      type = codeType(parts.join('-')); loc = codeLoc(lc);
+      const meta = TMAP[type], n = parseFloat(num);
+      value = isFinite(n) ? (meta&&meta.neg?'-':'+') + n.toFixed(1) + '%' : '';
+    }
     if(!type||!loc) continue;
     if(WEEK[di].length<3)
       WEEK[di].push({type,value,location:loc,meta:TMAP[type],
