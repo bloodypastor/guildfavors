@@ -259,7 +259,7 @@ footer.bottom{
     <div class="block">
       <h2>Server weekly bonuses</h2>
       <div id="weekly"></div>
-      <p class="hint">Set where the weekly server bonuses apply. Favors of the same type in the same region are highlighted — they stack. The Sanctuary region blocks activation.</p>
+      <p class="hint">Set where the weekly server bonuses apply. Favors of the same type in the same region are highlighted — they stack. Favors cannot be activated in the Sanctuary or Challenger dungeon.</p>
     </div>
 
     <div class="block">
@@ -329,6 +329,16 @@ DUNGEONS.forEach(l=>LOCCAT[l]='dungeon');
 TOWNS.forEach(l=>LOCCAT[l]='town');
 LOCCAT['Ocean']='ocean'; LOCCAT['Wilderness']='wild'; LOCCAT['Everywhere']='global';
 const CATCOLOR = {dungeon:'var(--dungeon)',town:'var(--town)',ocean:'var(--ocean)',wild:'var(--wild)',global:'var(--global)'};
+
+/* short region codes for links; the UI keeps full names */
+const LOC2CODE = {
+  'Aegis Keep':'ak','Cavernam':'cav','Darkmire Temple':'dm','Inferno':'inf','Kraul Hive':'kh',
+  'Mount Petram':'mp','Nusero':'nus','Ossuary':'oss','Shadowspire Cathedral':'ssc',
+  'The Mausoleum':'maus','Tidal Tomb':'tt','Wilderness':'wild',
+  "Anchor's Rest":'ar','Horseshoe Bay':'hb','Prevalia':'prev'};
+const CODE2LOC = Object.fromEntries(Object.entries(LOC2CODE).map(([l,c])=>[c,l]));
+const locCode = l => LOC2CODE[l] || l;
+const codeLoc = c => CODE2LOC[c] || c;   /* old links with full names still work */
 
 const WEEKLY_KINDS = [
   {id:'sanct',  ua:'Sanctuary Dungeon',              icon:'sanctuary'},
@@ -619,7 +629,8 @@ function renderWeek(){
 }
 function addToPlan(f){
   const day = WEEK[SEL_DAY], dn = DAYS[SEL_DAY].ua;
-  if(WEEKLY.sanct && f.location===WEEKLY.sanct) return toast('Sanctuary — favors cannot be activated there');
+  const blk = blockedBy(f.location);
+  if(blk) return toast(`${blk} — favors cannot be activated there`);
   if(day.length>=3) return toast(`All three slots on ${dn} are taken`);
   if(day.some(p=>p.type===f.type && p.location===f.location)) return toast(`That favor is already planned for this region on ${dn}`);
   if(f.count && plannedCount(favKey(f))>=f.count) return toast(`All ×${f.count} of these are already planned`);
@@ -643,9 +654,9 @@ function fallbackCopy(txt){
 let writingHash = false;
 function saveHash(){
   const p=new URLSearchParams();
-  Object.entries(WEEKLY).forEach(([k,v])=>{ if(v) p.set('w.'+k,v); });
-  SOCIETY_LOCS.forEach(x=>{ if(JOBS[x.loc]) p.set('j.'+x.id, JOBS[x.loc]/1000); });
-  DAYS.forEach((d,di)=>WEEK[di].forEach((f,i)=>p.set(d.id+i, [f.type,f.value,f.location].join('~'))));
+  Object.entries(WEEKLY).forEach(([k,v])=>{ if(v) p.set('w.'+k,locCode(v)); });
+  SOCIETY_LOCS.forEach(x=>{ if(JOBS[x.loc]) p.set('j.'+(LOC2CODE[x.loc]||x.id), JOBS[x.loc]/1000); });
+  DAYS.forEach((d,di)=>WEEK[di].forEach((f,i)=>p.set(d.id+i, [f.type,f.value,locCode(f.location)].join('~'))));
   writingHash = true;
   location.replace('#'+p.toString());
   setTimeout(()=>{ writingHash = false; }, 0);
@@ -657,9 +668,10 @@ function loadHash(){
   const dayIdx = Object.fromEntries(DAYS.map((d,i)=>[d.id,i]));
   const p=new URLSearchParams(location.hash.slice(1));
   for(const [k,v] of p){
-    if(k.startsWith('w.')) { WEEKLY[k.slice(2)]=v; continue; }
+    if(k.startsWith('w.')) { WEEKLY[k.slice(2)]=codeLoc(v); continue; }
     if(k.startsWith('j.')){
-      const x = SOCIETY_LOCS.find(s=>s.id===k.slice(2)), g = parseGold(v);
+      const id = k.slice(2);
+      const x = SOCIETY_LOCS.find(s=>s.id===id || LOC2CODE[s.loc]===id), g = parseGold(v);
       if(x && g) JOBS[x.loc]=g;
       continue;
     }
@@ -668,7 +680,8 @@ function loadHash(){
     if(!m) continue;
     const di = m[1]==='p' ? 0 : dayIdx[m[1]];
     if(di==null) continue;
-    const [type,value,loc]=v.split('~');
+    const [type,value,lc]=v.split('~');
+    const loc = codeLoc(lc||'');
     if(!type||!loc) continue;
     if(WEEK[di].length<3)
       WEEK[di].push({type,value,location:loc,meta:TMAP[type],
@@ -700,6 +713,12 @@ function visible(opts){
     }
     return true;
   });
+}
+/* weekly Sanctuary and Challenger dungeons block favor activation */
+function blockedBy(loc){
+  if(WEEKLY.sanct && loc===WEEKLY.sanct) return 'Sanctuary';
+  if(WEEKLY.chall && loc===WEEKLY.chall) return 'Challenger';
+  return '';
 }
 function stacksWith(f){
   if(!f.meta || !f.meta.weekly) return false;
@@ -774,7 +793,7 @@ function listHTML(list){
 }
 function rowHTML(f){
   const cat = LOCCAT[f.location]||'dungeon';
-  const dead = WEEKLY.sanct && f.location===WEEKLY.sanct;
+  const dead = blockedBy(f.location);
   const stack = stacksWith(f);
   const planned = plannedCount(favKey(f));
   const tiers = TMAP[f.type] ? TMAP[f.type].tiers.join('/')+'%' : '?';
@@ -782,7 +801,7 @@ function rowHTML(f){
     : !f.raw ? `<span class="note">no value came from the sheet for this row</span>`
     : `<span class="note">sheet value "${esc(f.raw)}" is not a wiki tier (${esc(tiers)})</span>`;
   const note = odd ? odd
-            : dead ? '<span class="note">Sanctuary — cannot activate</span>'
+            : dead ? `<span class="note">${dead} — cannot activate</span>`
             : stack ? '<span class="note" style="color:var(--ok)">stacks with the weekly bonus</span>' : '';
   return `<div class="row${dead?' dead':''}${stack?' stacked':''}" data-k="${esc(f.type+'|'+f.value+'|'+f.location)}" title="${esc(TIERNAME[f.tier])}">
     <img src="${ICONS[f.meta?f.meta.icon:'slayer']||''}" alt="">
@@ -807,7 +826,7 @@ function matrixHTML(list){
     if(!fs.length) return '<td class="empty">·</td>';
     const n = fs.reduce((s,f)=>s+f.count,0);
     const best = fs.reduce((a,b)=> b.num>a.num?b:a);
-    const dead = WEEKLY.sanct && l===WEEKLY.sanct;
+    const dead = blockedBy(l);
     const k = esc(best.type+'|'+best.value+'|'+best.location);
     return `<td class="has cell${dead?' dead':''}${fs.some(f=>!f.exact)?' odd':''}" data-k="${k}"
       title="${esc(l)} · ${esc(t.ua)} ${esc(best.value)} (${TIERNAME[best.tier]}) — add to plan">
