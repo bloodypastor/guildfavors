@@ -295,7 +295,7 @@ footer.bottom{
   <h1>Guild Favor Vault</h1>
   <div class="head-right">
     <span class="stamp">data as of <b id="stamp-date">—</b> · <b id="stamp-total">—</b> favors in the vault</span>
-    <button class="btn head-btn" id="toggle-matrix">Show matrix</button>
+    <button class="btn head-btn" id="toggle-matrix">Show list</button>
     <button class="btn head-btn ghost" id="reload">Reload data</button>
     <button class="btn head-btn ghost" id="diag" title="Show what the sheet actually returned">?</button>
   </div>
@@ -486,7 +486,7 @@ let WEEK = DAYS.map(()=>[]);   // per day: up to 3 favors
 let SEL_DAY = TODAY;
 let WEEKLY = Object.assign({}, DEFAULT_WEEKLY);
 let JOBS = {};                   // location → gold
-let showMatrix = false;
+let showMatrix = true;   /* matrix is the default view */
 let STAMP = DATA_DATE;
 let RAW_SAMPLE = null;
 const F = {loc:'', type:'', tier:'', q:''};
