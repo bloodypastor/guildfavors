@@ -152,11 +152,30 @@ input[type=text]{max-width:none;width:100%}
 .add:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ---- week planner ---- */
-.week{padding:12px 16px 14px;border-bottom:1px solid #2c2438;background:#110f19}
-.week-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
-.week-head h2{margin:0;font-family:'Silkscreen',monospace;font-size:12px;color:var(--gold);font-weight:400}
-.week-head .hint{margin:0;flex:1;min-width:200px}
-.week-head .btn{width:auto;margin:0;padding:7px 12px}
+.week{border-bottom:1px solid #2c2438;background:#110f19}
+.week{padding:10px 16px}
+.week-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.week-toggle{display:flex;align-items:center;gap:8px;background:none;border:0;padding:4px 2px;cursor:pointer;color:var(--gold)}
+.week-toggle h2{margin:0;font-family:'Silkscreen',monospace;font-size:12px;color:inherit;font-weight:400;white-space:nowrap}
+.week-toggle .chev{display:inline-block;font-size:12px;transition:transform .15s}
+.week-toggle:hover{color:#fff}
+.week:not(.collapsed) .week-toggle .chev{transform:rotate(90deg)}
+.week-strip{display:flex;gap:4px}
+.chip{display:flex;align-items:center;gap:5px;padding:5px 8px;cursor:pointer;
+  background:#14111d;border:1px solid #2c2438;border-radius:3px;
+  font-family:'Silkscreen',monospace;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.chip b{font-weight:400;color:#554d6b}
+.chip.has b{color:var(--paper)}
+.chip.full b{color:var(--gold)}
+.chip.today{box-shadow:inset 0 -2px 0 var(--ok)}
+.chip:hover{border-color:var(--gold-dim);color:var(--gold)}
+.chip.sel{border-color:var(--gold);color:var(--gold);background:#1d1828}
+.plan-count{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.week-actions{display:flex;gap:8px;margin-left:auto}
+.week-actions .btn{width:auto;margin:0;padding:7px 12px;white-space:nowrap}
+.week-body .hint{margin:8px 0 10px}
+.week.collapsed .week-body{display:none}
+.week:not(.collapsed) .week-strip{display:none}
 .week-scroll{overflow-x:auto}
 .week-grid{display:grid;grid-template-columns:repeat(7,minmax(148px,1fr));gap:6px}
 .day{display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid #251f33;border-radius:3px;background:#14111d}
@@ -221,13 +240,50 @@ footer.bottom{
 }
 .toast.show{opacity:1}
 
+/* ---- tablet ---- */
+@media (max-width:1200px){
+  .week-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
 @media (max-width:900px){
   body{padding:8px}
   .body{grid-template-columns:1fr}
-  aside{border-right:0;border-bottom:1px solid #2c2438;order:2}
+  aside{border-right:0;border-top:1px solid #2c2438;order:2;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px 24px}
   main{order:1}
   .row{flex-wrap:wrap}
   .row .main{flex-basis:60%}
+  .week-strip{order:5;flex-basis:100%}
+  .chip{flex:1;justify-content:center}
+  .plan-count{display:none}
+}
+/* ---- phone ---- */
+@media (max-width:600px){
+  body{padding:0}
+  header.top{padding:10px 12px;gap:8px}
+  h1{font-size:15px}
+  .head-right{gap:6px}
+  .stamp{flex-basis:100%;font-size:12px}
+  .week{padding:8px 12px}
+  .week-actions .btn{padding:7px 9px;font-size:10px}
+  .week-strip{gap:3px}
+  .chip{flex-direction:column;gap:1px;padding:4px 0;font-size:9.5px}
+  .week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  main{padding:12px}
+  aside{padding:12px}
+  .filters select,.filters input{flex:1 1 140px}
+  .count{flex-basis:100%;margin-left:0}
+  .row{gap:8px;padding:8px 4px;flex-wrap:nowrap}
+  .row .main{flex-basis:auto}
+  .row img{width:28px;height:28px}
+  .qty{min-width:26px}
+  .add{padding:6px 7px}
+  select{max-width:none;flex:1}
+  .weekly-row select{max-width:150px}
+}
+@media (max-width:380px){
+  .week-grid{grid-template-columns:1fr}
+  .week-actions{margin-left:0;flex-basis:100%}
+  .week-actions .btn{flex:1}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -245,14 +301,22 @@ footer.bottom{
   </div>
 </header>
 
-<section class="week">
+<section class="week collapsed" id="week-sec">
   <div class="week-head">
-    <h2>Weekly activation plan · <span id="plan-count">0</span></h2>
-    <p class="hint">Pick a day, then add favors from the list or matrix. Three slots per day, week starts on Saturday.</p>
-    <button class="btn" id="copy-plan" disabled>Copy for Discord</button>
-    <button class="btn ghost" id="clear-plan">Clear week</button>
+    <button class="week-toggle" id="week-toggle" aria-expanded="false" aria-controls="week-body" title="Show or hide the weekly plan">
+      <span class="chev" aria-hidden="true">▸</span><h2>Weekly plan</h2>
+    </button>
+    <div class="week-strip" id="week-strip" role="group" aria-label="Day to add favors to"></div>
+    <span class="plan-count" id="plan-count"></span>
+    <div class="week-actions">
+      <button class="btn" id="copy-plan" disabled>Copy for Discord</button>
+      <button class="btn ghost" id="clear-plan">Clear week</button>
+    </div>
   </div>
-  <div class="week-scroll"><div class="week-grid" id="week"></div></div>
+  <div class="week-body" id="week-body">
+    <p class="hint">Pick a day, then add favors from the list or matrix. Three slots per day, week starts on Saturday.</p>
+    <div class="week-scroll"><div class="week-grid" id="week"></div></div>
+  </div>
 </section>
 
 <div class="body">
@@ -292,7 +356,7 @@ const META_TAB  = 'meta';          // tab holding the update date in A1
 /* optional: File → Share → Publish to web → CSV. Paste that link here.
    It is served with CORS headers and returns plain text, so it avoids both
    the file:// restriction and the gviz column-type problem. */
-   const PUB_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-…/pub?gid=0&single=true&output=csv';
+const PUB_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRhKLrtanqXAZZ257PIcRh9Acp9zUajiN5fLIIDgqNGvAov3jMaAyqdxVFY0wc_Aug2EHlhloJ1dPY0/pub?output=csv';
 const DATA_DATE = '—';             // fallback shown if the meta tab is unreachable
 /* ============================================================ */
 
@@ -308,7 +372,7 @@ const TYPES = [
   {key:'Damage to Creatures',   ua:'Damage in Region',       icon:'damage_region',          tiers:[10,12.5,15]},
   {key:'Damage from Creatures', ua:'Damage Prevention',      icon:'damage_prevention',    tiers:[10,12.5,15],    neg:true},
   {key:'Boss Damage Dealt',     ua:'Boss Damage',            icon:'boss_damage',          tiers:[12.5,15,17.5]},
-  {key:'Boss Damage Prevention',ua:'Boss Damage Prevention', icon:'boss_prevention',      tiers:[12.5,15,17.5],  neg:true},
+  {key:'Boss Damage Prevention',ua:'Boss Damage Prevention', icon:'boss_prevention',      tiers:[12.5,15,17.5],  neg:true, mx:'Boss Dmg Prevention'},
   {key:'Chance for x2 Harvest', ua:'Harvest Yield',          icon:'harvest',              tiers:[25,35,45]},
 ];
 const SLAYERS = ['Beastial','Construct','Daemonic','Elemental','Humanoid','Monstrous','Nature','Undead'];
@@ -659,6 +723,16 @@ function renderWeek(){
   }).join('');
   const n = planTotal();
   $('#plan-count').textContent = n ? `${n} planned · adding to ${DAYS[SEL_DAY].ua}` : `adding to ${DAYS[SEL_DAY].ua}`;
+  /* collapsed view: one chip per day — pick the target day without opening the grid */
+  $('#week-strip').innerHTML = DAYS.map((d,di)=>{
+    const k = WEEK[di].length;
+    const cls = ['chip', di===SEL_DAY&&'sel', di===TODAY&&'today', k&&'has', k>=3&&'full'].filter(Boolean).join(' ');
+    return `<button class="${cls}" data-day="${di}" aria-pressed="${di===SEL_DAY}"
+      title="Add favors to ${d.ua}${di===TODAY?' (today)':''} · ${k}/3">${d.short}<b>${k}</b></button>`;
+  }).join('');
+  $('#week-strip').querySelectorAll('.chip').forEach(b=>{
+    b.onclick = ()=>{ SEL_DAY = +b.dataset.day; renderWeek(); };
+  });
   $('#copy-plan').disabled = !n;
   $('#week').querySelectorAll('.day-h, button.cellp:not(.filled)').forEach(b=>{
     b.onclick = ()=>{ SEL_DAY = +b.dataset.day; renderWeek(); };
@@ -745,6 +819,7 @@ function loadHash(){
 window.addEventListener('hashchange', ()=>{
   if(writingHash) return;
   loadHash();
+  if(planTotal()) setWeekOpen(true, false);
   renderSociety();
   render();
 });
@@ -867,9 +942,13 @@ function rowHTML(f){
     <button class="add">add to plan</button>
   </div>`;
 }
+/* shorter region names for the matrix header only; full name stays in the tooltip */
+const MATRIX_SHORT = {
+  'Darkmire Temple':'Darkmire','Kraul Hive':'Kraul','Mount Petram':'Mt. Petram',
+  'Shadowspire Cathedral':'Shadowspire','The Mausoleum':'Mausoleum',"Anchor's Rest":'Anchor\'s','Horseshoe Bay':'Horseshoe'};
 function matrixHTML(list){
   const data = list || FAVORS;
-  const locs = ['Everywhere','Wilderness',...DUNGEONS,'Ocean',...TOWNS];
+  const locs = ['Wilderness',...DUNGEONS,'Ocean','Everywhere',...TOWNS];
   const rows = TYPES.filter(t=>data.some(f=>f.type===t.key));
   if(!rows.length) return `<div class="state"><h2>Nothing matches</h2><p>Try clearing the filters.</p></div>`;
   const cell = (t,l)=>{
@@ -887,9 +966,9 @@ function matrixHTML(list){
     <thead><tr><th class="rowhead">Bonus</th>${locs.map(l=>{
       const c=CATCOLOR[LOCCAT[l]||'dungeon'];
       const b = weeklyBadges(l);
-      return `<th style="color:${c}">${esc(l)}${b?'<br>'+b:''}</th>`;
+      return `<th style="color:${c}" title="${esc(l)}">${esc(MATRIX_SHORT[l]||l)}${b?'<br>'+b:''}</th>`;
     }).join('')}</tr></thead>
-    <tbody>${rows.map(t=>`<tr><td class="rowhead">${esc(t.ua)}</td>${locs.map(l=>cell(t,l)).join('')}</tr>`).join('')}</tbody>
+    <tbody>${rows.map(t=>`<tr><td class="rowhead" title="${esc(t.ua)}">${esc(t.mx||t.ua)}</td>${locs.map(l=>cell(t,l)).join('')}</tr>`).join('')}</tbody>
   </table></div>`;
 }
 
@@ -900,8 +979,25 @@ function render(){
   renderWeekly(); renderWeek(); renderMain();
 }
 
+/* ---------- planner open / closed ----------
+   Collapsed by default; each viewer's choice is remembered in their browser.
+   A link that carries a plan always opens expanded, so the plan is seen. */
+const WEEK_OPEN_KEY = 'gfv.weekOpen';
+function setWeekOpen(open, remember){
+  $('#week-sec').classList.toggle('collapsed', !open);
+  $('#week-toggle').setAttribute('aria-expanded', String(open));
+  if(remember){ try{ localStorage.setItem(WEEK_OPEN_KEY, open?'1':'0'); }catch(e){} }
+}
+function initWeekOpen(){
+  let saved = null;
+  try{ saved = localStorage.getItem(WEEK_OPEN_KEY); }catch(e){}
+  setWeekOpen(planTotal()>0 || saved==='1', false);
+}
+$('#week-toggle').onclick = ()=>setWeekOpen($('#week-sec').classList.contains('collapsed'), true);
+
 /* ---------- start ---------- */
 loadHash();
+initWeekOpen();
 renderWeekly(); renderSociety(); renderWeek();
 $('#copy-plan').onclick = copyPlan;
 $('#clear-plan').onclick = ()=>{ if(!planTotal()) return; WEEK=DAYS.map(()=>[]); saveHash(); render(); toast('Week cleared'); };
